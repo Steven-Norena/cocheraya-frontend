@@ -1,11 +1,8 @@
-# 💻 ParkShare — Frontend Web (React + TypeScript + Vite)
-
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/RC6EaRM2)
-
+# 💻 CocheraYa — Frontend Web (React + TypeScript + Vite)
 ---
 
 ## 📑 Portada
-* **Proyecto:** ParkShare — Cliente Web
+* **Proyecto:** CocheraYa — Cliente Web
 * **Curso:** CS 2031 Desarrollo Basado en Plataforma
 * **Institución:** Universidad de Ingeniería y Tecnología (UTEC) — Lima, Perú
 * **Despliegue en Producción:** [Enlace de Producción (Netlify)](https://parkshare-utec.netlify.app)
