@@ -1,8 +1,11 @@
 # 💻 CocheraYa — Frontend Web (React + TypeScript + Vite)
 ---
-Integrantes:
-- Steven Daniel Noreña Paredes -- 202510642
 
+# 👤 Integrantes:
+- Steven Daniel Noreña Paredes (202510642)
+
+...
+  
 ## 📑 Portada
 * **Proyecto:** CocheraYa — Cliente Web
 * **Curso:** CS 2031 Desarrollo Basado en Plataforma
