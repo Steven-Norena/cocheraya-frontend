@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 import { ProtectedRoute, PublicRoute } from './components/AuthGuard';
+import DriverNavigation from './components/DriverNavigation';
 import ErrorBoundary from './components/ErrorBoundary';
 import Spinner from './components/Spinner';
 
@@ -30,10 +31,11 @@ const UserManagement = lazy(() => import('./views/admin/UserManagement'));
 const NotFound = lazy(() => import('./views/NotFound'));
 
 const DashboardLayout: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isDriver = user?.role === 'DRIVER';
   return (
-    <div className="app-container">
-      {isAuthenticated && <Sidebar />}
+    <div className={'app-container' + (isDriver ? ' driver-layout' : '')}>
+      {isAuthenticated && (isDriver ? <DriverNavigation /> : <Sidebar />)}
       <main className="main-content">
         <Outlet />
       </main>
@@ -61,6 +63,7 @@ export const App: React.FC = () => {
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
             <Routes>
+              <Route path="/" element={<Navigate to="/login" replace />} />
               {/* Public Routes */}
               <Route 
                 path="/login" 

@@ -3,7 +3,7 @@ import { Sun, Moon } from 'lucide-react';
 
 export const ThemeToggle: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+    return localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
   });
 
   useEffect(() => {
@@ -30,7 +30,9 @@ export const ThemeToggle: React.FC = () => {
         border: '1px solid var(--panel-border)',
         background: 'rgba(255, 255, 255, 0.03)',
       }}
-      title={theme === 'dark' ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+      type="button"
+      aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
     >
       {theme === 'dark' ? (
         <Sun size={18} style={{ color: 'var(--warning)' }} />

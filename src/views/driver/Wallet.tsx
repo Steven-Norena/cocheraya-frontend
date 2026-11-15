@@ -1,3 +1,4 @@
+import { formatSoles } from '../../services/presentation';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -145,7 +146,7 @@ export const Wallet: React.FC = () => {
                   Saldo Disponible
                 </span>
                 <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#fff', marginTop: '0.5rem', letterSpacing: '-0.02em' }}>
-                  S/. {balance !== null ? balance.toFixed(2) : '0.00'}
+                  {formatSoles(balance ?? 0)}
                 </h2>
               </div>
               <WalletIcon size={40} style={{ opacity: 0.7 }} />
@@ -153,7 +154,7 @@ export const Wallet: React.FC = () => {
 
             <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', opacity: 0.9 }}>
               <span>Moneda: Soles Peruanos (PEN)</span>
-              <span>ParkShare Secure Pay</span>
+              <span>CocheraYa Secure Pay</span>
             </div>
           </Card>
 
@@ -171,7 +172,7 @@ export const Wallet: React.FC = () => {
                 required
                 min="1"
                 step="0.01"
-                label="Monto a Recargar (S/.)"
+                label="Monto a recargar (S/)"
                 placeholder="Ej: 50.00"
                 value={topUpAmount}
                 onChange={(e) => setTopUpAmount(e.target.value === '' ? '' : Number(e.target.value))}
@@ -188,7 +189,7 @@ export const Wallet: React.FC = () => {
                     style={{ flex: 1, minWidth: '60px', fontWeight: 700 }}
                     onClick={() => setTopUpAmount(amount)}
                   >
-                    +S/. {amount}
+                    +{formatSoles(amount)}
                   </Button>
                 ))}
               </div>
@@ -287,7 +288,7 @@ export const Wallet: React.FC = () => {
                           {tx.amountDisplay}
                         </span>
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          Saldo: S/. {tx.balanceAfter.toFixed(2)}
+                          Saldo: {formatSoles(tx.balanceAfter)}
                         </span>
                       </div>
                     </div>

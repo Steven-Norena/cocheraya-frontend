@@ -1,406 +1,324 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import { Compass, Heart, MapPin, Search, Star, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import parkingService, { ParkingSpace } from '../../services/parkingService';
+import parkingService, { type ParkingSpace } from '../../services/parkingService';
 import reservationService from '../../services/reservationService';
-import { Search, MapPin, Navigation, Star, Heart, Compass, ShieldAlert } from 'lucide-react';
-import useDebounce from '../../hooks/useDebounce';
+import { distanceMeters, formatDistance, formatSoles, parkingZones } from '../../services/presentation';
+import './map-search.css';
 
-// SVG Custom Markers for absolute bundler reliability and sleek design
-const carMarkerSvg = `
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="16" cy="16" r="14" fill="#a855f7" fill-opacity="0.2" stroke="#a855f7" stroke-width="2"/>
-  <circle cx="16" cy="16" r="6" fill="#a855f7"/>
-</svg>
-`;
+type Coordinates = [number, number];
+type SearchResult = { key: string; spaces: ParkingSpace[]; failed: boolean };
+type Sort = 'distance' | 'price';
+const CARTO_KEY = import.meta.env.VITE_CARTO_API_KEY?.trim();
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const locationIcon = L.divIcon({ className: 'search-location-marker', iconSize: [16, 16] });
 
-const parkingMarkerSvg = `
-<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M18 2C10.27 2 4 8.27 4 16C4 26.5 18 34 18 34C18 34 32 26.5 32 16C32 8.27 25.73 2 18 2ZM18 10C20.21 10 22 11.79 22 14C22 16.21 20.21 18 18 18C15.79 18 14 16.21 14 14C14 11.79 15.79 10 18 10Z" fill="#10b981"/>
-</svg>
-`;
-
-const currentPosIcon = L.divIcon({
-  html: carMarkerSvg,
-  className: 'custom-car-marker',
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-});
-
-const parkingIcon = L.divIcon({
-  html: parkingMarkerSvg,
-  className: 'custom-parking-marker',
-  iconSize: [36, 36],
-  iconAnchor: [18, 34],
-});
-
-// Component to dynamically change map view center
-const ChangeView: React.FC<{ center: [number, number]; zoom: number }> = ({ center, zoom }) => {
+function MapCenter({ center, radius, onCenter }: {
+  center: Coordinates;
+  radius: number;
+  onCenter: (center: Coordinates) => void;
+}) {
   const map = useMap();
   useEffect(() => {
-    map.setView(center, zoom);
-  }, [center, zoom, map]);
+    map.fitBounds(L.latLng(center).toBounds(radius * 2), { padding: [32, 32], maxZoom: 16, animate: false });
+  }, [map, center, radius]);
+  useMapEvents({ click: ({ latlng }) => onCenter([latlng.lat, latlng.lng]) });
   return null;
-};
+}
 
-// Component to listen for drag/click actions on Leaflet Map
-const MapEventsHandler: React.FC<{ onMapClick: (lat: number, lng: number) => void }> = ({ onMapClick }) => {
-  useMapEvents({
-    click(e) {
-      onMapClick(e.latlng.lat, e.latlng.lng);
-    }
+function pin(space: ParkingSpace, selected: boolean) {
+  const label = document.createElement('span');
+  label.textContent = formatSoles(space.pricePerHour);
+  return L.divIcon({
+    html: label,
+    className: selected ? 'search-price-pin is-selected' : 'search-price-pin',
+    iconSize: [76, 32],
+    iconAnchor: [38, 30],
   });
-  return null;
-};
+}
 
-export const MapSearch: React.FC = () => {
+const normalize = (text: string) => text.toLocaleLowerCase('es-PE').normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+export default function MapSearch() {
   const { balance } = useAuth();
   const navigate = useNavigate();
-
-  // Search state
-  const [center, setCenter] = useState<[number, number]>([-12.1221, -77.0298]); // Miraflores default
-  const [zoom, setZoom] = useState(15);
-  const [radius, setRadius] = useState(2000); // in meters
-  const [spaces, setSpaces] = useState<ParkingSpace[]>([]);
+  const rows = useRef(new Map<number, HTMLButtonElement>());
+  const reservationRequest = useRef(false);
+  const [center, setCenter] = useState<Coordinates>(parkingZones.Miraflores);
+  const [zone, setZone] = useState('Miraflores');
+  const [radius, setRadius] = useState(2000);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<Sort>('distance');
+  const [covered, setCovered] = useState(false);
+  const [result, setResult] = useState<SearchResult>();
+  const [retry, setRetry] = useState(0);
+  const [tilesUnavailable, setTilesUnavailable] = useState(false);
+  const [useFallbackTiles, setUseFallbackTiles] = useState(false);
+  const [tileRetry, setTileRetry] = useState(0);
+  const [locationNotice, setLocationNotice] = useState('');
+  const [locating, setLocating] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [selectedId, setSelectedId] = useState<number>();
   const [favorites, setFavorites] = useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Real-time search query with debounce
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
-
-  const filteredSpaces = spaces.filter(space => 
-    space.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-    space.address.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
-  );
-
-  // Selected space details drawer
-  const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
-  const [hasActiveReservation, setHasActiveReservation] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [activeReservation, setActiveReservation] = useState(false);
   const [reserving, setReserving] = useState(false);
+  const [lat, lng] = center;
+  const searchKey = [lat, lng, radius, retry].join(',');
+  const loading = result?.key !== searchKey;
+  const failed = !loading && result.failed;
+  const search = normalize(query.trim());
 
-  // Geolocation trigger
-  const handleLocate = () => {
-    if (navigator.geolocation) {
-      setLoading(true);
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setCenter([latitude, longitude]);
-          setError(null);
-          setLoading(false);
-        },
-        () => {
-          setError('No se pudo acceder a la geolocalización. Usando ubicación predeterminada.');
-          setLoading(false);
-        }
-      );
-    } else {
-      setError('Geolocalización no soportada en este navegador.');
-    }
-  };
+  const matches = (loading ? [] : result.spaces)
+    .filter(space => space.status === 'AVAILABLE'
+      && normalize(space.title + ' ' + space.address).includes(search)
+      && (!covered || space.features?.some(feature => normalize(feature) === 'techado')))
+    .map(space => ({ space, distance: distanceMeters(lat, lng, space.latitude, space.longitude) }))
+    .sort((a, b) => sort === 'price' ? a.space.pricePerHour - b.space.pricePerHour || a.distance - b.distance : a.distance - b.distance);
+  const selected = matches.find(({ space }) => space.id === selectedId)?.space;
+  const carto = CARTO_KEY && !useFallbackTiles;
 
-  // Check active reservations and load favorites on mount
   useEffect(() => {
-    handleLocate();
-    checkActiveReservations();
-    loadFavorites();
+    const controller = new AbortController();
+    void reservationService.getMyReservations(controller.signal)
+      .then(reservations => setActiveReservation(reservations.some(item => item.status === 'PENDING' || item.status === 'ACTIVE')))
+      .catch(() => undefined);
+    void parkingService.getFavorites(controller.signal)
+      .then(spaces => setFavorites(spaces.map(space => space.id)))
+      .catch(() => undefined);
+    return () => controller.abort();
   }, []);
 
-  // Fetch nearby spaces whenever center/radius changes
   useEffect(() => {
-    fetchNearbySpaces();
-  }, [center, radius]);
-
-  const checkActiveReservations = async () => {
-    try {
-      const res = await reservationService.getMyReservations();
-      const active = res.some(r => r.status === 'PENDING' || r.status === 'ACTIVE');
-      setHasActiveReservation(active);
-    } catch {
-      setHasActiveReservation(false);
-    }
-  };
-
-  const loadFavorites = async () => {
-    try {
-      const favList = await parkingService.getFavorites();
-      setFavorites(favList.map(f => f.id));
-    } catch {
-      setFavorites([]);
-    }
-  };
-
-  const fetchNearbySpaces = async () => {
-    setLoading(true);
-    try {
-      const res = await parkingService.searchNearby({
-        lat: center[0],
-        lng: center[1],
-        radius,
+    const controller = new AbortController();
+    void parkingService.searchNearby({ lat, lng, radius }, controller.signal)
+      .then(spaces => {
+        if (!controller.signal.aborted) setResult({ key: searchKey, spaces, failed: false });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setResult({ key: searchKey, spaces: [], failed: true });
       });
-      setSpaces(res);
-      setError(null);
-    } catch (err: any) {
-      setError('Error al buscar cocheras cercanas.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => controller.abort();
+  }, [lat, lng, radius, searchKey]);
 
-  const toggleFavorite = async (spaceId: number) => {
-    const isFav = favorites.includes(spaceId);
+  function changeCenter(next: Coordinates, label: string) {
+    setCenter(next);
+    setZone(label);
+    setSelectedId(undefined);
+    setNotice('');
+  }
+
+  function locate() {
+    if (!navigator.geolocation) {
+      setLocationNotice('Este navegador no ofrece ubicación. Puedes seguir buscando por zona.');
+      return;
+    }
+    setLocating(true);
+    setLocationNotice('');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        changeCenter([coords.latitude, coords.longitude], 'Mi ubicación');
+        setLocating(false);
+      },
+      () => {
+        setLocationNotice('No se pudo obtener tu ubicación. Puedes seguir buscando por zona.');
+        setLocating(false);
+      },
+      { timeout: 8000, maximumAge: 60000 },
+    );
+  }
+
+  function select(id: number, fromMap = false) {
+    setSelectedId(id);
+    setNotice('');
+    if (fromMap) rows.current.get(id)?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  }
+
+  async function toggleFavorite(space: ParkingSpace) {
+    setFavoriteBusy(true);
+    setNotice('');
+    const isFavorite = favorites.includes(space.id);
     try {
-      if (isFav) {
-        await parkingService.removeFromFavorites(spaceId);
-        setFavorites(prev => prev.filter(id => id !== spaceId));
-      } else {
-        await parkingService.addToFavorites(spaceId);
-        setFavorites(prev => [...prev, spaceId]);
-      }
+      if (isFavorite) await parkingService.removeFromFavorites(space.id);
+      else await parkingService.addToFavorites(space.id);
+      setFavorites(previous => isFavorite ? previous.filter(id => id !== space.id) : [...previous, space.id]);
     } catch {
-      setError('No se pudo actualizar favoritos.');
-    }
-  };
-
-  const handleReserve = async () => {
-    if (!selectedSpace) return;
-    if (hasActiveReservation) {
-      setError('Ya tienes una reserva activa. Cancélala o termínala antes de hacer otra.');
-      return;
-    }
-    
-    // Check balance
-    if (balance !== null && balance < selectedSpace.pricePerHour) {
-      setError('Saldo insuficiente en tu billetera. Carga saldo antes de reservar.');
-      return;
-    }
-
-    setReserving(true);
-    setError(null);
-    try {
-      const res = await reservationService.create(selectedSpace.id);
-      setSelectedSpace(null);
-      // Redirect to reservations screen
-      navigate('/driver/reservations', { state: { newReservation: res } });
-    } catch (err: any) {
-      setError(
-        err.response?.data?.message || 
-        'No se pudo completar la reserva. Intenta de nuevo.'
-      );
+      setNotice('No se pudo actualizar la cochera favorita. Intenta de nuevo.');
     } finally {
+      setFavoriteBusy(false);
+    }
+  }
+
+  async function reserve(space: ParkingSpace) {
+    if (reservationRequest.current || activeReservation) return;
+    if (balance !== null && balance < space.pricePerHour) {
+      setNotice('Tu saldo es insuficiente. Recarga tu billetera para reservar.');
+      return;
+    }
+    reservationRequest.current = true;
+    setReserving(true);
+    setNotice('');
+    try {
+      const reservation = await reservationService.create(space.id);
+      navigate('/driver/reservations', { state: { newReservation: reservation } });
+    } catch (error) {
+      const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+      setNotice(message || 'No se pudo completar la reserva. Intenta de nuevo.');
+    } finally {
+      reservationRequest.current = false;
       setReserving(false);
     }
-  };
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2>Buscar Estacionamiento</h2>
-          <p>Cocheras disponibles a tu alrededor en tiempo real</p>
+    <section className="parking-search" aria-labelledby="parking-search-title">
+      <header className="parking-search-header">
+        <h1 id="parking-search-title">Encuentra una cochera</h1>
+        <div className="parking-search-controls">
+          <label className="parking-search-query">
+            <Search size={18} aria-hidden="true" />
+            <input className="form-input" type="search" aria-label="Buscar por nombre o calle" placeholder="Busca por nombre o calle" value={query} onChange={event => setQuery(event.target.value)} />
+          </label>
+          <select className="form-input" aria-label="Zona de búsqueda" value={zone} onChange={event => {
+            const next = event.target.value as keyof typeof parkingZones;
+            setLocationNotice('');
+            changeCenter(parkingZones[next], next);
+          }}>
+            {!(zone in parkingZones) && <option value={zone}>{zone}</option>}
+            {Object.keys(parkingZones).map(name => <option value={name} key={name}>{name}</option>)}
+          </select>
+          <select className="form-input" aria-label="Radio de búsqueda" value={radius} onChange={event => setRadius(Number(event.target.value))}>
+            <option value={500}>Radio 500 m</option>
+            <option value={1000}>Radio 1 km</option>
+            <option value={2000}>Radio 2 km</option>
+            <option value={5000}>Radio 5 km</option>
+          </select>
+          <button className="btn btn-secondary" type="button" onClick={locate} disabled={locating}>
+            <Compass size={17} aria-hidden="true" /> {locating ? 'Ubicando…' : 'Mi ubicación'}
+          </button>
         </div>
+      </header>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          {/* Real-time search with debounce */}
-          <div className="form-group" style={{ margin: 0, width: '220px', position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input 
-              type="text" 
-              className="form-input" 
-              placeholder="Buscar por nombre o calle..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', margin: 0 }}
-            />
-          </div>
-          <div className="form-group" style={{ margin: 0, width: '160px' }}>
-            <select 
-              className="form-input" 
-              value={radius} 
-              onChange={(e) => setRadius(Number(e.target.value))}
-              style={{ padding: '0.6rem 1rem' }}
-            >
-              <option value={500}>Radio: 500m</option>
-              <option value={1000}>Radio: 1km</option>
-              <option value={2000}>Radio: 2km</option>
-              <option value={5000}>Radio: 5km</option>
+      {locationNotice && <p className="parking-search-notice" role="status">{locationNotice}</p>}
+      {activeReservation && (
+        <div className="parking-search-notice parking-search-active">
+          Tienes una reserva en curso. <Link to="/driver/reservations">Ver mi reserva</Link>
+        </div>
+      )}
+
+      <div className="parking-search-layout">
+        <section className="parking-results" aria-label="Cocheras disponibles">
+          <div className="parking-results-header">
+            <strong aria-live="polite">{loading ? 'Buscando cocheras…' : failed ? 'Cocheras' : matches.length + (matches.length === 1 ? ' cochera' : ' cocheras')}</strong>
+            <select className="form-input" aria-label="Ordenar cocheras" value={sort} onChange={event => setSort(event.target.value as Sort)}>
+              <option value="distance">Por cercanía</option>
+              <option value="price">Menor precio</option>
             </select>
+            <label className="parking-cover-filter">
+              <input type="checkbox" checked={covered} onChange={event => setCovered(event.target.checked)} /> Techado
+            </label>
           </div>
-          <button onClick={handleLocate} className="btn btn-secondary" style={{ padding: '0.65rem 1rem' }}>
-            <Compass size={18} />
-            Mi Ubicación
-          </button>
-        </div>
-      </div>
 
-      {hasActiveReservation && (
-        <div className="active-res-banner" style={{ margin: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <ShieldAlert size={24} style={{ color: 'var(--warning)' }} />
-            <div>
-              <h4 style={{ color: 'var(--text-primary)' }}>Reserva activa en progreso</h4>
-              <p style={{ fontSize: '0.85rem' }}>Tienes una reserva pendiente de Check-in o Check-out.</p>
+          {failed ? (
+            <div className="parking-results-state" role="alert">
+              <p>No pudimos cargar las cocheras de esta zona.</p>
+              <button className="btn btn-secondary" type="button" onClick={() => setRetry(value => value + 1)}>Reintentar</button>
             </div>
-          </div>
-          <button className="btn btn-primary btn-sm" onClick={() => navigate('/driver/reservations')}>
-            Ver Mi Reserva
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <div className="dev-banner" style={{ background: 'var(--danger-bg)', borderColor: 'var(--danger)', color: 'var(--danger)', margin: 0 }}>
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Main Map Split Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: selectedSpace ? '1fr 350px' : '1fr', gap: '1.5rem', flex: 1, minHeight: '500px' }}>
-        
-        {/* Map Container */}
-        <div className="map-container" style={{ height: '600px' }}>
-          <MapContainer 
-            center={center} 
-            zoom={zoom} 
-            scrollWheelZoom={true}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            />
-            
-            <ChangeView center={center} zoom={zoom} />
-            <MapEventsHandler onMapClick={(lat, lng) => setCenter([lat, lng])} />
-
-            {/* Current Position Marker */}
-            <Marker position={center} icon={currentPosIcon}>
-              <Popup>Tu ubicación de búsqueda</Popup>
-            </Marker>
-
-            {/* Parking Space Markers */}
-            {filteredSpaces.map((space) => (
-              <Marker 
-                key={space.id} 
-                position={[space.latitude, space.longitude]} 
-                icon={parkingIcon}
-                eventHandlers={{
-                  click: () => {
-                    setSelectedSpace(space);
-                  },
-                }}
-              >
-                <Popup>
-                  <div style={{ fontWeight: 700 }}>{space.title}</div>
-                  <div style={{ color: 'var(--success)', fontWeight: 600 }}>S/. {space.pricePerHour.toFixed(2)}/h</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{space.address}</div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-        </div>
-
-        {/* Selected Cochera Drawer */}
-        {selectedSpace && (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: 'fit-content' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <h3 style={{ fontSize: '1.2rem' }}>{selectedSpace.title}</h3>
-              <button 
-                onClick={() => setSelectedSpace(null)} 
-                className="btn btn-secondary" 
-                style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: 'var(--text-muted)' }}
-              >
-                ✖
-              </button>
-            </div>
-
-            {selectedSpace.photoUrl && (
-              <img 
-                src={selectedSpace.photoUrl} 
-                alt={selectedSpace.title} 
-                style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-md)' }} 
-              />
-            )}
-
-            <div style={{ display: 'flex', justifyItems: 'center', justifyContent: 'space-between' }}>
-              <span className={`badge badge-${selectedSpace.status.toLowerCase()}`}>
-                {selectedSpace.status === 'AVAILABLE' ? 'Disponible' : selectedSpace.status === 'RESERVED' ? 'Reservado' : 'Ocupado'}
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--warning)', fontWeight: 700 }}>
-                <Star size={16} fill="var(--warning)" />
-                {selectedSpace.averageRating ? selectedSpace.averageRating.toFixed(1) : 'S/R'}
-              </div>
-            </div>
-
-            <div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase' }}>
-                Precio por hora
-              </span>
-              <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                S/. {selectedSpace.pricePerHour.toFixed(2)}
-              </span>
-            </div>
-
-            <div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase' }}>
-                Dirección
-              </span>
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{selectedSpace.address}</p>
-            </div>
-
-            <div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                Descripción
-              </span>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{selectedSpace.description}</p>
-            </div>
-
-            {selectedSpace.features && selectedSpace.features.length > 0 && (
-              <div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                  Características
-                </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {selectedSpace.features.map((feat, index) => (
-                    <span 
-                      key={index} 
-                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', borderRadius: 'var(--radius-sm)', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--text-secondary)', border: '1px solid var(--panel-border)' }}
-                    >
-                      {feat}
+          ) : !loading && matches.length === 0 ? (
+            <div className="parking-results-state"><p>No hay cocheras con esos filtros. Prueba otra zona o amplía el radio.</p></div>
+          ) : (
+            <ul className="parking-result-list">
+              {matches.map(({ space, distance }) => (
+                <li key={space.id}>
+                  <button
+                    ref={element => {
+                      if (element) rows.current.set(space.id, element);
+                      else rows.current.delete(space.id);
+                    }}
+                    type="button"
+                    className="parking-result"
+                    aria-pressed={space.id === selectedId}
+                    onClick={() => select(space.id)}
+                  >
+                    <span className="parking-result-title">{space.title}</span>
+                    <strong className="parking-price">{formatSoles(space.pricePerHour)} <small>/ h</small></strong>
+                    <span className="parking-result-address">{space.address}</span>
+                    <span className="parking-result-meta">
+                      <MapPin size={14} aria-hidden="true" />
+                      {formatDistance(distance)}
+                      {space.features?.[0] && ' · ' + space.features[0]}
                     </span>
-                  ))}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="parking-map-panel" aria-label="Mapa y detalle">
+          <div className="parking-map">
+            <MapContainer center={center} zoom={15} scrollWheelZoom={false}>
+              <TileLayer
+                key={String(carto) + tileRetry}
+                url={carto ? 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=' + encodeURIComponent(CARTO_KEY) : OSM_TILES}
+                attribution={OSM_ATTRIBUTION + (carto ? ' &copy; <a href="https://carto.com/attributions">CARTO</a>' : '')}
+                eventHandlers={{
+                  tileerror: () => carto ? setUseFallbackTiles(true) : setTilesUnavailable(true),
+                }}
+              />
+              <MapCenter center={center} radius={radius} onCenter={next => changeCenter(next, 'Centro del mapa')} />
+              <Marker position={center} icon={locationIcon} interactive={false} />
+              {matches.map(({ space }) => (
+                <Marker key={space.id} position={[space.latitude, space.longitude]} icon={pin(space, space.id === selectedId)}
+                  title={space.title + ', ' + formatSoles(space.pricePerHour) + ' por hora'}
+                  zIndexOffset={space.id === selectedId ? 1000 : 0}
+                  eventHandlers={{ click: () => select(space.id, true) }}
+                />
+              ))}
+            </MapContainer>
+            {tilesUnavailable && (
+              <div className="parking-map-status" role="status">
+                El mapa no pudo cargar. La lista sigue disponible.
+                <button className="btn btn-secondary btn-sm" type="button" onClick={() => {
+                  setTilesUnavailable(false);
+                  setTileRetry(value => value + 1);
+                }}>Recargar mapa</button>
+              </div>
+            )}
+          </div>
+
+          {selected && (
+            <article className="parking-selection" aria-label="Detalle de la cochera">
+              {selected.photoUrl && <img src={selected.photoUrl} alt={selected.title} loading="lazy" />}
+              <div className="parking-selection-copy">
+                <h2>{selected.title}</h2>
+                <p>{selected.address}</p>
+                {selected.description && <p>{selected.description}</p>}
+                <div className="parking-selection-meta">
+                  <strong className="parking-price">{formatSoles(selected.pricePerHour)} / h</strong>
+                  {selected.averageRating ? <span><Star size={15} aria-hidden="true" /> {selected.averageRating.toFixed(1)}</span> : null}
+                  {selected.features?.map(feature => <span key={feature}>{feature}</span>)}
+                </div>
+                {notice && <p role="alert">{notice}</p>}
+                <div className="parking-selection-actions">
+                  <button className="btn btn-primary" type="button" disabled={reserving || activeReservation} onClick={() => void reserve(selected)}>
+                    {reserving ? 'Reservando…' : 'Reservar cochera'}
+                  </button>
+                  <button className="btn btn-secondary" type="button" aria-label="Guardar en favoritos" aria-pressed={favorites.includes(selected.id)}
+                    disabled={favoriteBusy} onClick={() => void toggleFavorite(selected)}>
+                    <Heart size={19} fill={favorites.includes(selected.id) ? 'currentColor' : 'none'} />
+                  </button>
                 </div>
               </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-              <button 
-                className={`btn ${favorites.includes(selectedSpace.id) ? 'btn-secondary' : 'btn-secondary'}`} 
-                style={{ padding: '0.75rem' }} 
-                onClick={() => toggleFavorite(selectedSpace.id)}
-              >
-                <Heart size={20} fill={favorites.includes(selectedSpace.id) ? 'var(--danger)' : 'transparent'} stroke={favorites.includes(selectedSpace.id) ? 'var(--danger)' : 'var(--text-primary)'} />
-              </button>
-
-              <button 
-                className="btn btn-primary" 
-                style={{ flex: 1 }} 
-                onClick={handleReserve}
-                disabled={reserving || selectedSpace.status !== 'AVAILABLE'}
-              >
-                {reserving ? 'Reservando...' : selectedSpace.status !== 'AVAILABLE' ? 'No disponible' : 'Reservar ahora'}
-              </button>
-            </div>
-          </div>
-        )}
-
+              <button className="btn btn-secondary parking-selection-close" type="button" aria-label="Cerrar detalle" onClick={() => setSelectedId(undefined)}><X size={18} /></button>
+            </article>
+          )}
+        </section>
       </div>
-    </div>
+    </section>
   );
-};
-
-export default MapSearch;
+}
