@@ -3,6 +3,7 @@
 
 # 👤 Integrantes:
 - Steven Daniel Noreña Paredes (202510642)
+- Luciano Gabriel Rivera Valentin (202410149)
 
 ...
   
