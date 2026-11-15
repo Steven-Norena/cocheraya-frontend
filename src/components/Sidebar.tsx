@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import ThemeToggle from './ThemeToggle';
+import { formatSoles } from '../services/presentation';
 
 interface SidebarProps {
   onLogout?: () => void;
@@ -30,7 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
       <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <MapPin size={28} style={{ color: 'var(--primary)' }} />
-          <span>ParkShare</span>
+          <span>CocheraYa</span>
         </div>
       </div>
 
@@ -65,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
               Mi Billetera
             </span>
             <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)' }}>
-              S/. {balance.toFixed(2)}
+              {formatSoles(balance)}
             </span>
           </div>
         )}

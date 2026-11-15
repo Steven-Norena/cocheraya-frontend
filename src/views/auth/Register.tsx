@@ -104,7 +104,7 @@ export const Register: React.FC = () => {
             <MapPin size={36} />
           </div>
           <h2 style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>Crear Cuenta</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Únete a la comunidad ParkShare</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Únete a la comunidad CocheraYa</p>
         </div>
 
         {error && (
@@ -116,7 +116,7 @@ export const Register: React.FC = () => {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {/* Role selector buttons */}
           <div className="form-group">
-            <span className="form-label" style={{ marginBottom: '0.5rem' }}>¿Cómo usarás ParkShare?</span>
+            <span className="form-label" style={{ marginBottom: '0.5rem' }}>¿Cómo usarás CocheraYa?</span>
             <div style={{ display: 'flex', gap: '1rem' }}>
               <button
                 type="button"

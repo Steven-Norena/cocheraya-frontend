@@ -155,3 +155,9 @@ Para evaluar y comprobar la robustez y consistencia transaccional del frontend e
    * Tras unos minutos, realice el "Simular Check-out". La aplicación web calculará automáticamente el cobro proporcional, lo descontará de la billetera del `DRIVER`, lo sumará a la cuenta del `HOST`, y liberará la cochera a estado `AVAILABLE`.
 4. **Auditoría y Cierre:**
    * Valide en el panel de ganancias del `HOST` el desglose financiero: fecha, hora de entrada, hora de salida, la duración exacta en minutos del estacionamiento y el ID de reserva asociado para auditoría completa.
+
+## Mapa de búsqueda
+
+El mapa funciona sin clave en desarrollo mediante las teselas de OpenStreetMap y muestra su atribución. Respeta la [política de uso de teselas](https://operations.osmfoundation.org/policies/tiles/); para el despliegue, configura una clave de [CARTO Basemaps](https://www.carto.com/basemaps/apikey/index.html) mediante `VITE_CARTO_API_KEY` y vuelve a compilar. Usa una clave de cliente autorizada para el dominio de la aplicación.
+
+La búsqueda comienza en Miraflores. El usuario puede elegir otra zona o usar su ubicación. Si fallan las teselas, puede seguir usando la lista.

@@ -32,10 +32,10 @@ export interface CreateParkingSpaceMetadata {
 }
 
 export interface HostDashboardMetrics {
-  totalParkingSpaces: number;
-  completedReservations: number;
+  totalSpaces: number;
+  totalReservationsCompleted: number;
   totalEarnings: number;
-  averageRating: number;
+  averageRating: number | null;
   recentReservations: {
     reservationId: number;
     driverName: string;
