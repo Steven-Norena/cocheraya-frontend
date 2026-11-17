@@ -8,7 +8,7 @@
 * **Curso:** CS 2031 Desarrollo Basado en Plataformas
 * **Periodo:** 2026-2
 * **Institución:** Universidad de Ingeniería y Tecnología (UTEC) — Lima, Perú
-* **Despliegue en Producción:** [CocheraYa Web en Netlify](https://cocheraya-utec.netlify.app/login) *(o accesible mediante el bundle de producción)*
+* **Despliegue en Producción:** [CocheraYa Web en Netlify](https://cocheraya-utec.netlify.app/) *(o accesible mediante el bundle de producción)*
 
 ---
 
