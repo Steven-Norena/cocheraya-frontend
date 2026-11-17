@@ -9,6 +9,7 @@
 * **Periodo:** 2026-2
 * **Institución:** Universidad de Ingeniería y Tecnología (UTEC) — Lima, Perú
 * **Despliegue en Producción:** [CocheraYa Web en Netlify](https://cocheraya-utec.netlify.app/) *(o accesible mediante el bundle de producción)*
+* **Versión Mobile:** [CocheraYa Mobile](https://github.com/Steven-Norena/cocheraya-mobile)
 
 ---
 
