@@ -38,12 +38,11 @@ const MapEventsReceiver: React.FC<{ onDropPin: (lat: number, lng: number) => voi
 };
 
 const FEATURE_OPTIONS = [
-  'Vigilancia',
   'Techado',
-  'Cámara de Seguridad',
-  'Cargador Eléctrico',
-  'Control de Acceso',
-  'Vigilancia 24/7'
+  'Seguridad 24h',
+  'Acceso Camionetas',
+  'Iluminación',
+  'Cámaras',
 ];
 
 export const AddSpaceForm: React.FC = () => {

@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
+import Breadcrumbs from './components/Breadcrumbs';
 import { ProtectedRoute, PublicRoute } from './components/AuthGuard';
 import ErrorBoundary from './components/ErrorBoundary';
 import Spinner from './components/Spinner';
@@ -35,6 +36,7 @@ const DashboardLayout: React.FC = () => {
     <div className="app-container">
       {isAuthenticated && <Sidebar />}
       <main className="main-content">
+        <Breadcrumbs />
         <Outlet />
       </main>
     </div>

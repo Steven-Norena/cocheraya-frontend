@@ -14,9 +14,10 @@ export const Wallet: React.FC = () => {
   const { balance, refreshBalance } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // Read pagination state from URL query parameters
+  // Read pagination & filter state from URL query parameters
   const page = Number(searchParams.get('page')) || 0;
-  const size = Number(searchParams.get('size')) || 5;
+  const size = Number(searchParams.get('size')) || 10;
+  const filterType = (searchParams.get('type') as 'TOPUP' | 'CHARGE' | 'REFUND' | null) || null;
 
   const [topUpAmount, setTopUpAmount] = useState<number | ''>('');
   const [loadingTopUp, setLoadingTopUp] = useState(false);
@@ -25,8 +26,11 @@ export const Wallet: React.FC = () => {
 
   // Fetch transactions using our AbortController-enabled custom hook
   const fetchTransactionsCallback = useCallback((signal?: AbortSignal) => {
+    if (filterType) {
+      return walletService.getTransactionsByType(filterType, page, size, signal);
+    }
     return walletService.getTransactions(page, size, signal);
-  }, [page, size]);
+  }, [page, size, filterType]);
 
   const { 
     data: transactionsPage, 
@@ -61,11 +65,21 @@ export const Wallet: React.FC = () => {
   };
 
   const handlePageChange = (newPage: number) => {
-    setSearchParams({ page: newPage.toString(), size: size.toString() });
+    const params: Record<string, string> = { page: newPage.toString(), size: size.toString() };
+    if (filterType) params.type = filterType;
+    setSearchParams(params);
   };
 
   const handleSizeChange = (newSize: number) => {
-    setSearchParams({ page: '0', size: newSize.toString() });
+    const params: Record<string, string> = { page: '0', size: newSize.toString() };
+    if (filterType) params.type = filterType;
+    setSearchParams(params);
+  };
+
+  const handleTypeChange = (newType: 'TOPUP' | 'CHARGE' | 'REFUND' | null) => {
+    const params: Record<string, string> = { page: '0', size: size.toString() };
+    if (newType) params.type = newType;
+    setSearchParams(params);
   };
 
   // Helper to calculate X-Y of Z results display
@@ -153,7 +167,7 @@ export const Wallet: React.FC = () => {
 
             <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', opacity: 0.9 }}>
               <span>Moneda: Soles Peruanos (PEN)</span>
-              <span>ParkShare Secure Pay</span>
+              <span>CocheraYa Secure Pay</span>
             </div>
           </Card>
 
@@ -215,15 +229,39 @@ export const Wallet: React.FC = () => {
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Filas:</span>
               <select
                 className="form-input"
-                style={{ padding: '0.25rem 0.5rem', width: '65px', fontSize: '0.8rem', background: 'var(--input-bg)' }}
+                style={{ padding: '0.25rem 0.5rem', width: '70px', fontSize: '0.8rem', background: 'var(--input-bg)' }}
                 value={size}
                 onChange={(e) => handleSizeChange(Number(e.target.value))}
               >
-                <option value={5}>5</option>
                 <option value={10}>10</option>
-                <option value={20}>20</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
               </select>
             </div>
+          </div>
+
+          {/* Filter Type Pills (Endpoint 2: /wallet/transactions/{type}) */}
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', paddingBottom: '0.5rem' }}>
+            {[
+              { label: 'Todas', val: null },
+              { label: 'Recargas (TOPUP)', val: 'TOPUP' },
+              { label: 'Cobros (CHARGE)', val: 'CHARGE' },
+              { label: 'Reembolsos (REFUND)', val: 'REFUND' },
+            ].map(tab => {
+              const active = filterType === tab.val;
+              return (
+                <button
+                  key={tab.label}
+                  type="button"
+                  onClick={() => handleTypeChange(tab.val as any)}
+                  className={`btn btn-sm ${active ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.65rem' }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
           {loadingTransactions ? (

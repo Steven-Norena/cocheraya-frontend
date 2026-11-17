@@ -84,7 +84,7 @@ export const Login: React.FC = () => {
           }}>
             <MapPin size={36} />
           </div>
-          <h2 style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>ParkShare</h2>
+          <h2 style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>CocheraYa</h2>
           <p style={{ color: 'var(--text-secondary)' }}>Encuentra o alquila cocheras seguras</p>
         </div>
 

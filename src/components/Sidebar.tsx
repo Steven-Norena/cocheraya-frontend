@@ -30,7 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
       <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <MapPin size={28} style={{ color: 'var(--primary)' }} />
-          <span>ParkShare</span>
+          <span>CocheraYa</span>
         </div>
       </div>
 

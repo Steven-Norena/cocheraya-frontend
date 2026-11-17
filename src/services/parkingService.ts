@@ -21,6 +21,17 @@ export interface SearchNearbyParams {
   radius: number;
 }
 
+export const FEATURE_MAP: Record<string, number> = {
+  'Techado': 1,
+  'Seguridad 24h': 2,
+  'Vigilancia': 2,
+  'Vigilancia 24/7': 2,
+  'Acceso Camionetas': 3,
+  'Iluminación': 4,
+  'Cámaras': 5,
+  'Cámara de Seguridad': 5,
+};
+
 export interface CreateParkingSpaceMetadata {
   title: string;
   description: string;
@@ -28,12 +39,13 @@ export interface CreateParkingSpaceMetadata {
   pricePerHour: number;
   latitude: number;
   longitude: number;
-  features: string[];
+  features?: string[];
+  featureIds?: number[];
 }
 
 export interface HostDashboardMetrics {
-  totalParkingSpaces: number;
-  completedReservations: number;
+  totalSpaces: number;
+  totalReservationsCompleted: number;
   totalEarnings: number;
   averageRating: number;
   recentReservations: {
@@ -45,6 +57,9 @@ export interface HostDashboardMetrics {
     endTime?: string;
     pricePerHour: number;
   }[];
+  // Compatibility fields
+  totalParkingSpaces?: number;
+  completedReservations?: number;
 }
 
 export const parkingService = {
@@ -57,8 +72,22 @@ export const parkingService = {
   },
 
   async create(metadata: CreateParkingSpaceMetadata, photoFile?: File): Promise<ParkingSpace> {
+    const mappedIds = (metadata.featureIds && metadata.featureIds.length > 0)
+      ? metadata.featureIds
+      : (metadata.features || []).map(f => FEATURE_MAP[f] || 1).filter(Boolean);
+
+    const payload = {
+      title: metadata.title,
+      description: metadata.description,
+      address: metadata.address,
+      pricePerHour: metadata.pricePerHour,
+      latitude: metadata.latitude,
+      longitude: metadata.longitude,
+      featureIds: Array.from(new Set(mappedIds)),
+    };
+
     const formData = new FormData();
-    formData.append('data', JSON.stringify(metadata));
+    formData.append('data', JSON.stringify(payload));
     if (photoFile) {
       formData.append('photo', photoFile);
     }
@@ -71,8 +100,22 @@ export const parkingService = {
   },
 
   async update(id: number, metadata: CreateParkingSpaceMetadata, photoFile?: File): Promise<ParkingSpace> {
+    const mappedIds = (metadata.featureIds && metadata.featureIds.length > 0)
+      ? metadata.featureIds
+      : (metadata.features || []).map(f => FEATURE_MAP[f] || 1).filter(Boolean);
+
+    const payload = {
+      title: metadata.title,
+      description: metadata.description,
+      address: metadata.address,
+      pricePerHour: metadata.pricePerHour,
+      latitude: metadata.latitude,
+      longitude: metadata.longitude,
+      featureIds: Array.from(new Set(mappedIds)),
+    };
+
     const formData = new FormData();
-    formData.append('data', JSON.stringify(metadata));
+    formData.append('data', JSON.stringify(payload));
     if (photoFile) {
       formData.append('photo', photoFile);
     }

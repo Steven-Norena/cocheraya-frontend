@@ -73,7 +73,7 @@ export const Dashboard: React.FC = () => {
               </div>
               <div>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Reservas Finalizadas</span>
-                <div className="stat-value">{metrics.completedReservations}</div>
+                <div className="stat-value">{metrics.totalReservationsCompleted ?? metrics.completedReservations ?? 0}</div>
               </div>
             </div>
 
@@ -98,7 +98,7 @@ export const Dashboard: React.FC = () => {
               </div>
               <div>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Mis Cocheras</span>
-                <div className="stat-value">{metrics.totalParkingSpaces}</div>
+                <div className="stat-value">{metrics.totalSpaces ?? metrics.totalParkingSpaces ?? 0}</div>
               </div>
             </div>
           </div>
