@@ -1,0 +1,6 @@
+/login       /index.html  200
+/register    /index.html  200
+/driver/*    /index.html  200
+/host/*      /index.html  200
+/admin/*     /index.html  200
+/404         /index.html  200

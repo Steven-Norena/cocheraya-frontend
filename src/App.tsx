@@ -63,6 +63,7 @@ export const App: React.FC = () => {
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
             <Routes>
+              <Route path="/" element={<Navigate to="/login" replace />} />
               {/* Public Routes */}
               <Route 
                 path="/login" 
